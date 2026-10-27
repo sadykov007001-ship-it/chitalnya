@@ -580,7 +580,8 @@ async function start() {
   await loadLibrary()
   sync.init({ onChange: loadLibrary, setStatus: s => { $('syncDot').className = 'sync-dot ' + (s || ''); $('syncBtn').classList.toggle('spin', s === 'busy') }, toast })
   // Офлайн-режим включаем только в собранной версии (в ней sw.js со списком файлов)
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !location.pathname.includes('/chitalnya/')) navigator.serviceWorker.register('sw.js').catch(() => {})
+  const devCopy = location.hostname === 'localhost' && location.pathname.startsWith('/chitalnya/')
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !devCopy) navigator.serviceWorker.register('sw.js').catch(() => {})
   // Открыть файл, которым поделились с приложением на ПК (Chrome/Edge: «Открыть с помощью»)
   if ('launchQueue' in window) launchQueue.setConsumer(async p => { const files = await Promise.all((p.files || []).map(h => h.getFile())); const id = await addFiles(files); if (id) openReader(id) })
 }
