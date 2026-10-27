@@ -3,7 +3,7 @@
 //                            /meta/<id>.json — название, место чтения и заметки.
 // Слияние: книги и заметки объединяются по номеру, при споре побеждает более свежая правка;
 // место чтения — последнее по времени. Удаления передаются отметкой deleted.
-import { db } from './db.js'
+import { db, pack, unpack } from './db.js'
 
 const API = 'https://api.dropboxapi.com/2', CONTENT = 'https://content.dropboxapi.com/2'
 const redirect = () => location.origin + location.pathname
@@ -36,19 +36,21 @@ async function download(path) {
 }
 async function upload(path, blob) {
   const auth = { Authorization: 'Bearer ' + await token(), 'Content-Type': 'application/octet-stream' }
+  // Отправляем байты (ArrayBuffer), а не Blob: Safari надёжнее передаёт их в fetch
+  const bytes = async b => b.arrayBuffer()
   if (blob.size <= 140e6) {
-    const r = await fetch(CONTENT + '/files/upload', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ path, mode: 'overwrite', mute: true }) }, body: blob })
+    const r = await fetch(CONTENT + '/files/upload', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ path, mode: 'overwrite', mute: true }) }, body: await bytes(blob) })
     if (!r.ok) throw new Error('Dropbox: не загрузился файл (' + r.status + ')')
     return r.json()
   }
   // Большие файлы — частями по 8 МБ
   const CH = 8e6
-  let r = await fetch(CONTENT + '/files/upload_session/start', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': '{}' }, body: blob.slice(0, CH) })
+  let r = await fetch(CONTENT + '/files/upload_session/start', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': '{}' }, body: await bytes(blob.slice(0, CH)) })
   const { session_id } = await r.json()
   let off = CH
   for (; off + CH < blob.size; off += CH)
-    await fetch(CONTENT + '/files/upload_session/append_v2', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ cursor: { session_id, offset: off } }) }, body: blob.slice(off, off + CH) })
-  r = await fetch(CONTENT + '/files/upload_session/finish', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ cursor: { session_id, offset: off }, commit: { path, mode: 'overwrite', mute: true } }) }, body: blob.slice(off) })
+    await fetch(CONTENT + '/files/upload_session/append_v2', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ cursor: { session_id, offset: off } }) }, body: await bytes(blob.slice(off, off + CH)) })
+  r = await fetch(CONTENT + '/files/upload_session/finish', { method: 'POST', headers: { ...auth, 'Dropbox-API-Arg': asciiJSON({ cursor: { session_id, offset: off }, commit: { path, mode: 'overwrite', mute: true } }) }, body: await bytes(blob.slice(off)) })
   if (!r.ok) throw new Error('Dropbox: не загрузился большой файл')
   return r.json()
 }
@@ -93,7 +95,7 @@ async function run() {
       if (!m.book) continue
       // Сохраняем у себя то, что пришло из облака
       if (!lb || !same(strip(lb), m.book)) {
-        const cover = lb?.cover || (m.book.deleted ? null : await download('/covers/' + id + '.jpg').catch(() => null))
+        const cover = lb?.cover || (m.book.deleted ? null : await pack(await download('/covers/' + id + '.jpg').catch(() => null)))
         const hasFile = !!(await db.get('files', id))
         await db.put('books', { ...m.book, cover, remote: !hasFile && !m.book.deleted })
         if (m.book.deleted) await db.del('files', id)
@@ -104,7 +106,7 @@ async function run() {
       // Отправляем в облако файл книги и обложку, если их там ещё нет
       if (!m.book.deleted && !remoteBooks.has(id)) {
         const f = await db.get('files', id)
-        if (f) { await upload(`/books/${id}.${m.book.ext}`, f.blob); if (lb?.cover) await upload(`/covers/${id}.jpg`, lb.cover) }
+        if (f) { await upload(`/books/${id}.${m.book.ext}`, unpack(f.data) || f.blob); const c = unpack(lb?.cover); if (c) await upload(`/covers/${id}.jpg`, c) }
       }
       if (m.book.deleted && remoteBooks.has(id)) { await call('/files/delete_v2', { path: `/books/${id}.${m.book.ext}` }); await call('/files/delete_v2', { path: `/covers/${id}.jpg` }) }
       // Метаданные — если наши новее облачных
@@ -151,7 +153,7 @@ export const sync = {
     if (!cfg?.refresh) return null
     const blob = await download(`/books/${book.id}.${book.ext}`)
     if (!blob) return null
-    const rec = { id: book.id, blob, name: book.name || (book.title + '.' + book.ext) }
+    const rec = { id: book.id, data: await pack(blob), name: book.name || (book.title + '.' + book.ext) }
     await db.put('files', rec); return rec
   },
   async connect(key) {

@@ -2,7 +2,7 @@
 // формат книги разбирает formats.js, синхронизацию между телефоном и ПК делает sync.js через Dropbox.
 import '../vendor/foliate-js/view.js'
 import { Overlayer } from '../vendor/foliate-js/overlayer.js'
-import { db, persist } from './db.js'
+import { db, persist, pack, unpack } from './db.js'
 import { openBookFile, describe, extOf, FORMATS, CONVERT } from './formats.js'
 import { sync } from './sync.js'
 
@@ -50,9 +50,10 @@ const PALETTE = [['#2f4a3f', '#efe8d6'], ['#6d2e2a', '#f1e3cf'], ['#203247', '#d
 const hashN = s => [...String(s)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
 const coverURLs = new Map()
 const coverHtml = b => {
-  if (b.cover) {
+  const blob = unpack(b.cover)
+  if (blob) {
     let u = coverURLs.get(b.id)
-    if (!u) { u = URL.createObjectURL(b.cover); coverURLs.set(b.id, u) }
+    if (!u) { u = URL.createObjectURL(blob); coverURLs.set(b.id, u) }
     return `<div class="cover"><img src="${u}" alt="" loading="lazy"></div>`
   }
   const h = hashN(b.id), [cb, cc] = PALETTE[h % PALETTE.length], v = ['v1', 'v2', 'v3'][h % 3]
@@ -178,8 +179,8 @@ async function addFiles(fileList) {
       book.destroy?.()
       const cover = d.cover ? await shrinkCover(d.cover) : null
       const realExt = ext === 'zip' ? extOf(book.metadata?.title || '') || 'zip' : ext
-      await db.put('files', { id, blob: file, name: file.name })
-      await db.put('books', { id, title: d.title || file.name, author: d.author, ext: realExt, name: file.name, size: file.size, cover, added: now(), updated: now() })
+      await db.put('files', { id, data: await pack(file), name: file.name })
+      await db.put('books', { id, title: d.title || file.name, author: d.author, ext: realExt, name: file.name, size: file.size, cover: await pack(cover), added: now(), updated: now() })
       added++; lastId = id
     } catch (e) {
       console.error(e)
@@ -276,7 +277,7 @@ async function openReader(id, target) {
     let rec = await db.get('files', id)
     if (!rec && b.remote) { $('loadingText').textContent = 'Скачиваю книгу из облака…'; rec = await sync.fetchBook(b); if (!rec) throw new Error('не удалось скачать из облака') ; b.remote = false; await db.put('books', b) }
     if (!rec) throw new Error('файла книги нет на этом устройстве')
-    const file = new File([rec.blob], rec.name || b.name || ('book.' + b.ext))
+    const file = new File([unpack(rec.data) || rec.blob], rec.name || b.name || ('book.' + b.ext))
     const book = await openBookFile(file)
     if (cur !== b) return
     view?.close?.(); view?.remove()
@@ -315,9 +316,13 @@ async function openReader(id, target) {
 function closeReader() {
   hideSel(); closeSheet(); stopTimer()
   if (lastLoc && cur) saveState(true)
+  // Сразу останавливаем отрисовку книги: иначе foliate-js пытается пересчитать страницы, пока экран прячется
+  const v = view; view = null
+  try { v?.close?.() } catch {}
+  v?.remove()
   const r = $('reader'); r.classList.remove('ui'); r.classList.add('closed'); $('library').classList.remove('away')
   $('tabbar').hidden = false
-  setTimeout(() => { if (r.classList.contains('closed')) { r.hidden = true; view?.close?.(); view?.remove(); view = null } }, 420)
+  setTimeout(() => { if (r.classList.contains('closed')) r.hidden = true }, 420)
   cur = null; renderLibrary(); sync.soon()
 }
 

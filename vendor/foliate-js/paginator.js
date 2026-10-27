@@ -203,6 +203,8 @@ const makeMarginals = (length, part) => Array.from({ length }, () => {
 })
 
 const setStylesImportant = (el, styles) => {
+    // Читальня: страница могла уже выгрузиться (книгу закрыли во время перерисовки)
+    if (!el) return
     const { style } = el
     for (const [k, v] of Object.entries(styles)) style.setProperty(k, v, 'important')
 }
@@ -342,6 +344,7 @@ class View {
         const { width, height, margin } = this.#layout
         const vertical = this.#vertical
         const doc = this.document
+        if (!doc?.body) return // Читальня: страница уже выгружена
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
             // preserve max size if they are already set
             const { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
@@ -360,6 +363,7 @@ class View {
         }
     }
     expand() {
+        if (!this.document?.documentElement || !this.#contentRange) return // Читальня: страница выгружена
         const { documentElement } = this.document
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
@@ -950,6 +954,7 @@ export class Paginator extends HTMLElement {
             this.start - size, this.end - size, this.#getRectMapper())
     }
     #afterScroll(reason) {
+        if (!this.#view?.document?.body) return // Читальня: книга уже закрыта
         const range = this.#getVisibleRange()
         this.#lastVisibleRange = range
         // don't set new anchor if relocation was to scroll to anchor
@@ -1119,7 +1124,9 @@ export class Paginator extends HTMLElement {
         this.#view.document.defaultView.focus()
     }
     destroy() {
-        this.#observer.unobserve(this)
+        // Читальня: наблюдатель следит за #container, а не за this — отключаем его целиком,
+        // иначе после закрытия книги он перерисовывает уже выгруженную страницу
+        this.#observer.disconnect()
         this.#view.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()

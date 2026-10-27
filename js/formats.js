@@ -287,24 +287,40 @@ let djvuP
 const makeDJVU = async file => {
   djvuP ??= loadScript(V + 'djvu/djvu.js')
   await djvuP
-  const doc = new globalThis.DjVu.Document(await file.arrayBuffer())
-  const count = doc.getPagesQuantity()
+  // Страницы расшифровываются в фоновом потоке (Web Worker): иначе на 1–2 секунды
+  // замирает весь интерфейс и касания не срабатывают. Если поток не запустился — считаем на месте.
+  const buf = await file.arrayBuffer()
+  let worker = null, doc = null, count, contents
+  try {
+    worker = new globalThis.DjVu.Worker(V + 'djvu/djvu.js')
+    await worker.createDocument(buf.slice(0))
+    count = await worker.doc.getPagesQuantity().run()
+    contents = await worker.doc.getContents().run().catch(() => null)
+  } catch {
+    worker?.terminate(); worker = null
+    doc = new globalThis.DjVu.Document(buf)
+    count = doc.getPagesQuantity(); contents = doc.getContents?.()
+  }
   const cache = new Map()
   const pagePNG = async i => {
-    const page = await doc.getPage(i + 1)
-    const img = page.getImageData()
+    let img
+    if (worker) img = await worker.doc.getPage(i + 1).getImageData().run()
+    else { const page = await doc.getPage(i + 1); img = page.getImageData(); page.reset?.() }
     const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height
     canvas.getContext('2d').putImageData(img, 0, 0)
-    page.reset?.()
     return new Promise(r => canvas.toBlob(r, 'image/jpeg', .9))
   }
-  const load = async i => {
-    if (cache.has(i)) return cache.get(i)
+  // Страница DJVU расшифровывается 1–2 секунды, поэтому, показав страницу, сразу готовим следующие две
+  const render = async i => {
     const src = URL.createObjectURL(await pagePNG(i))
-    const html = URL.createObjectURL(new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0"><img src="${src}" style="display:block;width:100%"></body></html>`], { type: 'text/html' }))
-    cache.set(i, html); return html
+    return URL.createObjectURL(new Blob([`<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0"><img src="${src}" style="display:block;width:100%"></body></html>`], { type: 'text/html' }))
   }
-  const contents = doc.getContents?.() || []
+  const get = i => { if (!cache.has(i)) cache.set(i, render(i)); return cache.get(i) }
+  const load = async i => {
+    const html = await get(i)
+    if (worker) for (const j of [i + 1, i + 2]) if (j < count && !cache.has(j)) setTimeout(() => get(j), 50)
+    return html
+  }
   const toc = []
   const walkToc = (arr, out) => { for (const c of arr || []) { const m = /#?(\d+)/.exec(c.url || ''); const item = { label: c.description, href: String(m ? +m[1] - 1 : 0) }; out.push(item); if (c.children?.length) { item.subitems = []; walkToc(c.children, item.subitems) } } }
   walkToc(contents, toc)
@@ -317,7 +333,7 @@ const makeDJVU = async file => {
     splitTOCHref: href => [+href, null],
     getTOCFragment: d => d.documentElement,
     getCover: () => pagePNG(0),
-    destroy: () => { for (const u of cache.values()) URL.revokeObjectURL(u) },
+    destroy: () => { worker?.terminate(); for (const p of cache.values()) Promise.resolve(p).then(u => URL.revokeObjectURL(u)).catch(() => {}) },
   }
 }
 

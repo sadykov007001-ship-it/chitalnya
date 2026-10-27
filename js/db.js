@@ -47,6 +47,11 @@ export const db = {
   },
 }
 
+// Файлы храним как байты (ArrayBuffer), а не как Blob: так надёжнее во всех браузерах,
+// включая WebKit, который не всегда умеет класть Blob в IndexedDB
+export const pack = async blob => blob ? { buf: await blob.arrayBuffer(), type: blob.type || '' } : null
+export const unpack = x => !x ? null : x instanceof Blob ? x : x.buf ? new Blob([x.buf], { type: x.type || '' }) : null
+
 // Просим браузер не удалять данные при нехватке места (на iPhone это важно)
 export const persist = async () => {
   try { return await navigator.storage?.persist?.() } catch { return false }

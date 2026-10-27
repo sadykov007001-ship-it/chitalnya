@@ -135,7 +135,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .chrome.top{top:0;padding-top:env(safe-area-inset-top,0px);transform:translateY(-105%);opacity:0;border-bottom:1px solid var(--line)}
 .chrome.bot{bottom:0;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:translateY(105%);opacity:0;border-top:1px solid var(--line)}
 #reader.ui .chrome{transform:none;opacity:1}
-#reader.ui .rtop{opacity:0;pointer-events:none}
+#reader.ui .rtop,#reader.ui .rbot{opacity:0;pointer-events:none}
 .crow{display:flex;align-items:center;gap:2px;height:56px}
 .crow .ttl{flex:1;min-width:0;padding:0 6px}
 .crow .ttl b{display:block;font:600 17px/1.15 var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
