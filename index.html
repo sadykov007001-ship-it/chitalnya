@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>Читальня</title>
+<meta name="theme-color" content="#14171a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Читальня">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Полка -->
+  <section class="view" id="library" aria-label="Полка">
+    <header class="lib-head">
+      <div class="lib-title"><small id="today"></small><h1>Читальня</h1></div>
+      <button class="round" id="syncBtn" aria-label="Синхронизация" title="Синхронизация"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0113.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 01-13.7 5.6L4 15.5M4 20v-4.5h4.5"/></svg><i class="sync-dot" id="syncDot"></i></button>
+      <button class="round accent" id="addBtn" aria-label="Добавить книгу" title="Добавить книгу"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    </header>
+    <div id="continueSlot"></div>
+    <div class="stats" id="stats"></div>
+    <div class="shelf-h"><h3>Полка</h3><div class="seg" role="tablist" id="filters"><button class="on" data-filter="all">Все</button><button data-filter="now">Читаю</button><button data-filter="done">Прочитано</button></div></div>
+    <div class="searchbar" id="searchbar"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="shelfSearch" type="search" placeholder="Найти на полке" autocomplete="off"></div>
+    <div class="shelf" id="shelf"></div>
+    <div class="dropzone" id="dropzone"><b>Отпустите файл</b>EPUB, FB2, PDF, MOBI, DJVU и другие</div>
+    <input type="file" id="fileInput" multiple hidden>
+  </section>
+
+  <!-- Цитаты -->
+  <section class="view" id="quotes" aria-label="Цитаты" hidden>
+    <header class="lib-head"><div class="lib-title"><small>Все книги</small><h1>Цитаты</h1></div><button class="round" id="exportBtn" aria-label="Скопировать все цитаты" title="Скопировать все цитаты"><svg class="ic" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg></button></header>
+    <div id="quoteList"></div>
+  </section>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="on" data-tab="library"><svg class="ic" viewBox="0 0 24 24"><path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM16 5.5l3.2-.8 3 14.4-3.2.8z"/></svg>Полка</button>
+    <button data-tab="quotes"><svg class="ic" viewBox="0 0 24 24"><path d="M7 7h4v4c0 3-1.5 5-4 6M15 7h4v4c0 3-1.5 5-4 6"/></svg>Цитаты</button>
+  </nav>
+
+  <!-- Чтение -->
+  <section class="view closed" id="reader" aria-label="Чтение" hidden>
+    <div class="rtop"><button class="ib" data-act="close" aria-label="К полке"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><div class="ttl" id="rTitle"></div><button class="ib" data-act="bookmark" aria-label="Закладка"><svg class="ic" viewBox="0 0 24 24"><path d="M7 4h10v16l-5-3.5L7 20z"/></svg></button></div>
+    <div class="stage" id="stage"></div>
+    <div class="rbot"><span id="rChap"></span><span id="rLeft"></span><span id="rPage"></span></div>
+    <div class="loading" id="loading"><div class="spinner"></div><span id="loadingText">Открываю книгу…</span></div>
+
+    <div class="chrome top"><div class="crow">
+      <button class="ib" data-act="close" aria-label="К полке"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="ttl"><b id="cTitle"></b><span id="cAuthor"></span></div>
+      <button class="ib" data-act="find" aria-label="Поиск по книге"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+      <button class="ib" data-act="bookmark" aria-label="Закладка"><svg class="ic" viewBox="0 0 24 24"><path d="M7 4h10v16l-5-3.5L7 20z"/></svg></button>
+    </div></div>
+    <div class="chrome bot">
+      <div class="scrub"><input type="range" id="scrub" min="0" max="1" step="0.0005" value="0" aria-label="Место в книге"><div class="lbl"><span id="sChap"></span><span id="sPage"></span></div></div>
+      <div class="tools">
+        <button data-sheet="toc"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>Оглавление</button>
+        <button data-sheet="notes"><svg class="ic" viewBox="0 0 24 24"><path d="M5 19.5l1-4.5L16.5 4.5a2 2 0 013 3L9 18z"/></svg>Заметки</button>
+        <button data-sheet="type"><span class="aa">Аа</span>Текст</button>
+        <button data-act="night"><svg class="ic" viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 019.5 5a7.5 7.5 0 109.5 9.5z"/></svg>Ночь</button>
+      </div>
+    </div>
+    <div class="sel" id="sel" hidden></div>
+  </section>
+
+  <div class="scrim" id="scrim"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle"><div class="grab"></div><div class="sh"><h3 id="shTitle"></h3><button class="ib" data-act="sheet-close" aria-label="Закрыть"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="sb" id="shBody"></div></div>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
