@@ -6,6 +6,8 @@
 import { db, pack, unpack } from './db.js'
 
 const API = 'https://api.dropboxapi.com/2', CONTENT = 'https://content.dropboxapi.com/2'
+// Ключ приложения Dropbox «Chitalnya-Sadykov» (публичный идентификатор, вход идёт по PKCE без секрета)
+const APP_KEY = 'ns8xur2z5f123sk'
 const redirect = () => location.origin + location.pathname
 const asciiJSON = o => JSON.stringify(o).replace(/[\u007f-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -174,16 +176,9 @@ export const sync = {
       document.getElementById('syncOff').onclick = async () => { await this.disconnect(); closeSheet(); toast('Синхронизация отключена. Книги на устройстве остались') }
       return
     }
-    openSheet('Синхронизация', `<p class="hint">Чтобы книги, место чтения и заметки были одинаковыми на телефоне и компьютере, подключите бесплатный Dropbox. Это делается один раз.</p>
-      <p class="hint"><b>Если ключ приложения у вас уже есть</b> — вставьте его и войдите:</p>
-      <input class="field" id="dbxKey" placeholder="Ключ приложения (App key)" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(cfg?.key || '')}">
-      <div class="btnrow"><button class="btn primary" id="dbxGo">Войти в Dropbox</button></div>
-      <p class="hint" style="margin-top:18px"><b>Если ключа нет</b>, создайте его один раз на компьютере:<ol>
-        <li>Откройте <b>dropbox.com/developers/apps</b> и войдите (или зарегистрируйтесь бесплатно).</li>
-        <li>«Create app» → «Scoped access» → «App folder» → имя, например <code>Chitalnya-${Math.random().toString(36).slice(2, 6)}</code> → «Create app».</li>
-        <li>Вкладка «Permissions»: отметьте <code>files.content.write</code> и <code>files.content.read</code> → «Submit».</li>
-        <li>Вкладка «Settings» → «Redirect URIs»: вставьте <code>${esc(redirect())}</code> → «Add».</li>
-        <li>Там же скопируйте «App key» и вставьте выше. Тот же ключ потом введите на телефоне.</li></ol></p>`)
-    document.getElementById('dbxGo').onclick = () => { const k = document.getElementById('dbxKey').value.trim(); if (!/^[a-z0-9]{8,30}$/i.test(k)) return toast('Похоже, ключ вставлен не полностью'); this.connect(k) }
+    openSheet('Синхронизация', `<p class="hint">Книги, место чтения, выделения и заметки будут одинаковыми на телефоне и компьютере. Они хранятся в вашем Dropbox, в отдельной папке «Приложения/Chitalnya-Sadykov»: к остальным вашим файлам у «Читальни» доступа нет.</p>
+      <p class="hint">Нажмите кнопку, войдите в Dropbox и нажмите «Разрешить». Потом то же самое на другом устройстве.</p>
+      <div class="btnrow"><button class="btn primary" id="dbxGo">Войти в Dropbox</button></div>`)
+    document.getElementById('dbxGo').onclick = () => this.connect(APP_KEY)
   },
 }
